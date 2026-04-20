@@ -1,11 +1,35 @@
+# Editors
 .idea
+.vscode/
+.DS_Store
 
-#  Local terraform directories
-**/.terraform/*
+# Local terraform directories
+**/.terraform/
 
 # Local terragrunt directories
-**/.terragrunt-cache/*
+**/.terragrunt-cache/
 
-# .tfstate files
+# State files
 *.tfstate
 *.tfstate.*
+
+# Plan files
+*.tfplan
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Variable files (may contain secrets — allowlist explicitly with !name.tfvars)
+*.tfvars
+*.tfvars.json
+
+# Override files (local-only)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Environment files
+.env
+.env.*

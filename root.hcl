@@ -10,26 +10,25 @@ locals {
   region         = local.region_vars.locals.region
 }
 
-# NOTE: S3 remote state temporarily disabled for local iteration.
-# Re-enable once the S3 bucket + DynamoDB lock table are bootstrapped in the account.
 # Configure Terragrunt to automatically store tfstate files in S3.
-# The backend tf file is dynamically generate for each module.
-# remote_state {
-#   backend = "s3"
-#
-#   generate = {
-#     path      = "backend.tf"
-#     if_exists = "overwrite"
-#   }
-#
-#   config = {
-#     encrypt        = true
-#     bucket         = format("%s-%s-terraform-remote-state", local.account_number, local.region)
-#     key            = format("%s/%s/terraform.tfstate", local.app_name, path_relative_to_include())
-#     dynamodb_table = format("%s-terraform_state_locks", local.app_name)
-#     region         = local.region
-#   }
-# }
+# State locking uses S3 native lockfiles (requires Terraform >= 1.10 and bucket versioning).
+# The backend tf file is dynamically generated for each module.
+remote_state {
+  backend = "s3"
+
+  generate = {
+    path      = "backend.tf"
+    if_exists = "overwrite"
+  }
+
+  config = {
+    encrypt      = true
+    bucket       = format("%s-%s-terraform-remote-state", local.account_number, local.region)
+    key          = format("%s/%s/terraform.tfstate", local.app_name, path_relative_to_include())
+    use_lockfile = true
+    region       = local.region
+  }
+}
 
 # Generate an AWS provider block.
 generate "provider" {
