@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v5.12.0"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v7.5.0"
 }
 
 locals {
@@ -83,23 +83,25 @@ inputs = {
   subnet_ids       = dependency.vpc.outputs.private_subnets
 
   # SG created by the module. Ingress from the shared ALB SG on the container port.
+  # v7 of the module uses the newer aws_vpc_security_group_{ingress,egress}_rule
+  # schema: ip_protocol (not protocol), cidr_ipv4 (not cidr_blocks),
+  # referenced_security_group_id (not source_security_group_id).
   create_security_group = true
   security_group_name   = "${local.service_name}-task"
-  security_group_rules = {
-    egress_all = {
-      type        = "egress"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]
+  security_group_ingress_rules = {
+    from_alb = {
+      from_port                    = 80
+      to_port                      = 80
+      ip_protocol                  = "tcp"
+      referenced_security_group_id = dependency.alb.outputs.security_group_id
+      description                  = "App port ingress from shared ALB"
     }
-    ingress_from_alb = {
-      type                     = "ingress"
-      from_port                = 80
-      to_port                  = 80
-      protocol                 = "tcp"
-      source_security_group_id = dependency.alb.outputs.security_group_id
-      description              = "App port ingress from shared ALB"
+  }
+  security_group_egress_rules = {
+    all = {
+      ip_protocol = "-1"
+      cidr_ipv4   = "0.0.0.0/0"
+      description = "Allow all outbound"
     }
   }
 
@@ -108,14 +110,15 @@ inputs = {
   # Terraform from reverting those revisions.
   container_definitions = {
     (local.container) = {
-      image                    = "nginx:alpine"
-      essential                = true
-      readonly_root_filesystem = false
+      image                  = "nginx:alpine"
+      essential              = true
+      readonlyRootFilesystem = false
 
-      port_mappings = [
+      portMappings = [
         {
           name          = local.container
           containerPort = 80
+          hostPort      = 80
           protocol      = "tcp"
         }
       ]

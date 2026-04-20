@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/cluster?ref=v5.12.0"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/cluster?ref=v7.5.0"
 }
 
 locals {
@@ -25,7 +25,7 @@ dependency "tags" {
 }
 
 inputs = {
-  cluster_name = "${local.app_name}-${local.environment}"
+  name = "${local.app_name}-${local.environment}"
 
   fargate_capacity_providers = {
     FARGATE = {
