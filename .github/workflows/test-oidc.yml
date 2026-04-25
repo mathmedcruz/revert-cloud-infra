@@ -1,0 +1,47 @@
+# Workflow simples para testar a comunicacao OIDC entre GitHub Actions e AWS.
+# Salve este arquivo em: .github/workflows/test-oidc.yml
+#
+# Pre-requisitos:
+#   1. OIDC provider criado na AWS (token.actions.githubusercontent.com).
+#   2. IAM Role criada com a trust-policy.json deste repositorio.
+#   3. Variavel AWS_ROLE_ARN configurada em: Settings > Secrets and variables > Actions > Variables.
+#      Ex.: arn:aws:iam::123456789012:role/github-actions-oidc-test
+
+name: Test OIDC AWS
+
+on:
+  workflow_dispatch:        # Permite rodar manualmente pela aba Actions
+  push:
+    branches: [ main ]
+
+# Permissoes obrigatorias para o GitHub emitir o JWT do OIDC.
+permissions:
+  id-token: write           # Necessario para solicitar o token OIDC
+  contents: read            # Necessario para o actions/checkout
+
+jobs:
+  test-aws-auth:
+    name: Verificar autenticacao OIDC na AWS
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-oidc-test
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validar identidade (sts get-caller-identity)
+        run: |
+          echo "Quem sou eu na AWS?"
+          aws sts get-caller-identity
+
+      - name: Listar regioes (teste de chamada simples)
+        run: aws ec2 describe-regions --query "Regions[].RegionName" --output table
