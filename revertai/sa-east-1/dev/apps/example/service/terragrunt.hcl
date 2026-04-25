@@ -128,9 +128,6 @@ inputs = {
     }
   }
 
-  tasks_iam_role_permissions_boundary     = "arn:aws:iam::175209828699:policy/terragrunt-pipeline-boundary"
-  task_exec_iam_role_permissions_boundary = "arn:aws:iam::175209828699:policy/terragrunt-pipeline-boundary"
-
   load_balancer = {
     service = {
       target_group_arn = dependency.alb_target.outputs.target_group_arn
