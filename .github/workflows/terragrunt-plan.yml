@@ -1,0 +1,41 @@
+name: Terragrunt Plan
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    name: terragrunt run --all plan
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: sa-east-1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-terragrunt-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terragrunt run --all plan
+        uses: gruntwork-io/terragrunt-action@v3
+        with:
+          tg_version: 1.0.1
+          tofu_version: 1.11.6
+          tg_dir: revertai/sa-east-1/dev
+          tg_command: 'run --all plan --non-interactive'
+          tg_add_approve: '0'
+          tg_comment: '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
