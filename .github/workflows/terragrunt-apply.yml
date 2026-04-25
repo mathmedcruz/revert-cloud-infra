@@ -1,0 +1,45 @@
+name: Terragrunt Apply
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terragrunt-apply-dev
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: terragrunt run --all apply
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      AWS_REGION: sa-east-1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: gha-terragrunt-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terragrunt run --all apply
+        uses: gruntwork-io/terragrunt-action@v3
+        with:
+          tg_version: 1.0.1
+          tofu_version: 1.11.6
+          tg_dir: revertai/sa-east-1/dev
+          tg_command: 'run --all apply --non-interactive'
+          tg_add_approve: '1'
+          tg_comment: '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
