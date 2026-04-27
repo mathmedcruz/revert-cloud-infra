@@ -2,4 +2,5 @@
 # terragrunt.hcl configuration.
 locals {
   account_number = get_aws_account_id()
+  root_domain    = "revertai.com.br"
 }

@@ -4,7 +4,11 @@ terraform {
 
 locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("environment.hcl"))
-  environment      = local.environment_vars.locals.environment
+  account_vars     = read_terragrunt_config(find_in_parent_folders("account.hcl"))
+
+  environment = local.environment_vars.locals.environment
+  root_domain = local.account_vars.locals.root_domain
+  app_host    = "exemplo.${local.environment}.${local.root_domain}"
 }
 
 include "root" {
@@ -48,7 +52,7 @@ inputs = {
   vpc_id                 = dependency.vpc.outputs.vpc_id
   container_port         = 80
   alb_listener_arn       = dependency.alb.outputs.listeners["http"].arn
-  host                   = "exemplo.dev.revertai.com.br"
+  host                   = local.app_host
   listener_rule_priority = 100
   health_check_path      = "/"
 
