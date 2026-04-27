@@ -27,7 +27,12 @@ Versões fixadas no workflow `.github/workflows/terragrunt-{plan,apply}.yml`.
 │   ├── ecr/                    # ECR repository + lifecycle policy
 │   └── alb-target/             # target group + listener rule (host_header) p/ apps
 ├── revertai/                   # account "revertai"
-│   ├── account.hcl             # account_number = get_aws_account_id()
+│   ├── account.hcl             # account_number = get_aws_account_id(), root_domain
+│   ├── _global/                # serviços AWS region-agnostic (Route53)
+│   │   ├── region.hcl          # pinado em sa-east-1 (state bucket compartilhado)
+│   │   └── route53/dev-revertai-com-br/
+│   │       ├── environment.hcl
+│   │       └── route53/        # hosted zone "dev.revertai.com.br"
 │   └── sa-east-1/              # região
 │       ├── region.hcl          # region = "sa-east-1"
 │       └── dev/                # environment
@@ -40,6 +45,7 @@ Versões fixadas no workflow `.github/workflows/terragrunt-{plan,apply}.yml`.
 │               └── example/    # aplicação de exemplo
 │                   ├── ecr/
 │                   ├── alb-target/
+│                   ├── dns/      # record A/ALIAS na hosted zone → ALB
 │                   └── service/  # terraform-aws-modules/ecs/service v7.5.0
 └── .github/workflows/
     ├── terragrunt-plan.yml     # roda em PR pra main
@@ -90,17 +96,22 @@ s3://<ACCOUNT_ID>-<region>-terraform-remote-state/<app_name>/<path-relative-to-r
 | `vpc` | `terraform-aws-modules/terraform-aws-vpc` v5.21.0 | VPC, 3 subnets públicas + 3 privadas em 3 AZs, NAT gateway único, IGW, route tables |
 | `ecs-cluster` | `terraform-aws-modules/terraform-aws-ecs/cluster` v7.5.0 | Cluster Fargate (capacity provider FARGATE) |
 | `alb` | `terraform-aws-modules/terraform-aws-alb` v9.11.0 | ALB internet-facing, listener HTTP:80 com default action `404`, SG com ingress 0.0.0.0/0 |
+| `_global/route53/dev-revertai-com-br/route53` | `terraform-aws-modules/terraform-aws-route53` v6.4.0 | Hosted zone pública `dev.revertai.com.br` |
 | `apps/example/ecr` | local (`modules/ecr`) | ECR repository + lifecycle policy |
-| `apps/example/alb-target` | local (`modules/alb-target`) | Target group + listener rule (`host_header = example.dev.internal`) |
+| `apps/example/alb-target` | local (`modules/alb-target`) | Target group + listener rule (`host_header` derivado de `account.hcl` + `environment.hcl`) |
+| `apps/example/dns` | `terraform-aws-modules/terraform-aws-route53` v6.4.0 (raiz, `create_zone = false`) | Record A/ALIAS apontando o subdomínio da app pro ALB |
 | `apps/example/service` | `terraform-aws-modules/terraform-aws-ecs/service` v7.5.0 | ECS service Fargate, task definition (1 container nginx:alpine bootstrap), task role + execution role IAM, SG, log group |
 
 ### Padrão de "app"
 
-Cada aplicação vive em `revertai/<region>/<env>/apps/<app-name>/` com 3 units:
+Cada aplicação vive em `revertai/<region>/<env>/apps/<app-name>/` com 4 units:
 
 1. `ecr/` — repositório de imagem
 2. `alb-target/` — target group + regra de roteamento no ALB compartilhado (`host_header`)
-3. `service/` — ECS service + task definition
+3. `dns/` — record A/ALIAS no Route53 pra resolver `<sub>.<env>.<root_domain>` → ALB
+4. `service/` — ECS service + task definition
+
+**Invariante crítica:** o subdomínio em `dns/` (`app_subdomain`) e o em `alb-target/` (`app_host`) precisam casar. Se divergirem, a query DNS resolve mas o ALB cai na fixed-response 404 do listener (host_header não bate).
 
 A task definition é só um **bootstrap** (nginx:alpine). CI/CD da aplicação atualiza a task definition em runtime — `ignore_task_definition_changes = true` no terragrunt previne reverter.
 
@@ -203,6 +214,11 @@ terragrunt apply -auto-approve --working-dir alb
 terragrunt apply -auto-approve --working-dir apps/example/ecr
 terragrunt apply -auto-approve --working-dir apps/example/alb-target
 terragrunt apply -auto-approve --working-dir apps/example/service
+terragrunt apply -auto-approve --working-dir apps/example/dns
+
+# Hosted zone fica em _global (rodar separadamente, antes do dns/ da app)
+cd ../../_global/route53/dev-revertai-com-br
+terragrunt apply -auto-approve --working-dir route53
 ```
 
 Depois desse bootstrap, `run --all plan` no PR funciona porque os outputs reais do state sobrescrevem os mocks.
@@ -224,9 +240,38 @@ Depois desse bootstrap, `run --all plan` no PR funciona porque os outputs reais 
 
 ### Adicionar uma nova app
 
-1. Criar `revertai/sa-east-1/dev/apps/<app>/{ecr,alb-target,service}/terragrunt.hcl` (copiar de `example`)
-2. Ajustar `host`, `listener_rule_priority` (único por ALB), `service_name`, `container`
-3. PR + plan + merge + apply (na primeira vez, bootstrap manual de cada unit em ordem: ecr → alb-target → service)
+Os 4 units de `apps/example/` têm comentários `# AJUSTE:` em cada ponto que precisa mudar pra uma nova app. Workflow:
+
+1. **Copiar a pasta:**
+   ```bash
+   cp -r revertai/sa-east-1/dev/apps/example revertai/sa-east-1/dev/apps/<nova-app>
+   ```
+
+2. **Buscar e ajustar todos os `# AJUSTE:`** (em VS Code: `Ctrl+Shift+F` por `# AJUSTE:`):
+
+   | Arquivo | O que mudar |
+   |---|---|
+   | `dns/terragrunt.hcl` | `app_subdomain` — subdomínio público |
+   | `alb-target/terragrunt.hcl` | `app_host` (subdomínio DEVE bater com `app_subdomain` do dns), `name` (target group), `listener_rule_priority` (único no ALB — incrementar +10), `health_check_path` |
+   | `ecr/terragrunt.hcl` | `name` do repo ECR |
+   | `service/terragrunt.hcl` | locals (`service_name`, `task_family`, `container`, `log_group` — trocar `"example"` pelo nome da app), `cpu`/`memory`/`desired_count`, `image` (bootstrap), porta nos `portMappings` (precisa casar com `container_port` do alb-target) |
+
+3. **Bootstrap manual** (primeira vez — `run --all plan` falha por causa do mock de subnets):
+   ```bash
+   cd revertai/sa-east-1/dev
+   terragrunt apply -auto-approve --working-dir apps/<nova-app>/ecr
+   terragrunt apply -auto-approve --working-dir apps/<nova-app>/alb-target
+   terragrunt apply -auto-approve --working-dir apps/<nova-app>/service
+   terragrunt apply -auto-approve --working-dir apps/<nova-app>/dns
+   ```
+
+4. **PR + merge** — runs futuros vão pelo CI (`plan` no PR, `apply` no merge).
+
+**Checklist final** antes de abrir o PR:
+- [ ] Subdomínio idêntico em `dns/` e `alb-target/`
+- [ ] `listener_rule_priority` único entre todas as apps existentes
+- [ ] Porta do `service` (portMappings) bate com `container_port` do `alb-target`
+- [ ] Nome do repo ECR já tem imagem buildada (senão a CI da app vai falhar no primeiro deploy)
 
 ### Adicionar um novo recurso que cria role IAM
 

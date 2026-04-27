@@ -9,6 +9,9 @@ locals {
   environment   = local.environment_vars.locals.environment
   root_domain   = local.account_vars.locals.root_domain
   zone_name     = "${local.environment}.${local.root_domain}"
+
+  # AJUSTE: subdomínio público da app. DEVE ser igual ao `app_host` em ../alb-target/terragrunt.hcl
+  # senão o ALB não roteia a request (host_header não bate).
   app_subdomain = "exemplo"
 }
 
@@ -16,14 +19,8 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-dependency "route53_zone" {
-  config_path = "../../../../../_global/route53/dev-revertai-com-br/route53"
-
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_with_state           = true
-  mock_outputs = {
-    route53_zone_zone_id = { (local.zone_name) = "Z00000000000000000000" }
-  }
+dependencies {
+  paths = ["../../../../../_global/route53/dev-revertai-com-br/route53"]
 }
 
 dependency "alb" {
@@ -38,17 +35,17 @@ dependency "alb" {
 }
 
 inputs = {
-  zone_id = dependency.route53_zone.outputs.route53_zone_zone_id[local.zone_name]
+  create_zone = false
+  name        = local.zone_name
 
-  records = [
-    {
-      name = local.app_subdomain
+  records = {
+    (local.app_subdomain) = {
       type = "A"
       alias = {
         name                   = dependency.alb.outputs.dns_name
         zone_id                = dependency.alb.outputs.zone_id
         evaluate_target_health = true
       }
-    },
-  ]
+    }
+  }
 }

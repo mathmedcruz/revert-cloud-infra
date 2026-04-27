@@ -22,6 +22,8 @@ dependency "tags" {
 }
 
 inputs = {
+  # AJUSTE: nome do repositório ECR — vira "<env>-<app>".
   name = "${local.environment}-example"
+
   tags = dependency.tags.outputs.tags
 }
