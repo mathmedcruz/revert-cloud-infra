@@ -15,7 +15,9 @@ jobs:
     name: terragrunt run --all plan
     runs-on: ubuntu-latest
     env:
-      AWS_REGION: sa-east-1
+      tg_version: '1.0.1'
+      tofu_version: '1.11.6'
+      working_dir: 'revertai'
 
     steps:
       - name: Checkout
@@ -23,7 +25,9 @@ jobs:
 
       - name: Check terragrunt HCL
         uses: gruntwork-io/terragrunt-action@v3
-        with:
+        with:          
+          tg_version: ${{ env.tg_version }}
+          tofu_version: ${{ env.tofu_version }}
           tg_dir: ${{ env.working_dir }}
           tg_command: 'hcl fmt --check --diff'
 
@@ -37,9 +41,9 @@ jobs:
       - name: Terragrunt run --all plan
         uses: gruntwork-io/terragrunt-action@v3
         with:
-          tg_version: 1.0.1
-          tofu_version: 1.11.6
-          tg_dir: revertai/sa-east-1/dev
+          tg_version: ${{ env.tg_version }}
+          tofu_version: ${{ env.tofu_version }}
+          tg_dir: ${{ env.working_dir }}
           tg_command: 'run --all plan --non-interactive'
           tg_add_approve: '0'
           tg_comment: '1'
