@@ -48,7 +48,7 @@ inputs = {
   vpc_id                 = dependency.vpc.outputs.vpc_id
   container_port         = 80
   alb_listener_arn       = dependency.alb.outputs.listeners["http"].arn
-  host                   = "example.dev.internal"
+  host                   = "exemplo.dev.revertai.com.br"
   listener_rule_priority = 100
   health_check_path      = "/"
 
