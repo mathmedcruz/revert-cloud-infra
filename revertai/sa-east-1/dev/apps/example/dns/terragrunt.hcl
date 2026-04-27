@@ -6,9 +6,9 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("environment.hcl"))
   account_vars     = read_terragrunt_config(find_in_parent_folders("account.hcl"))
 
-  environment   = local.environment_vars.locals.environment
-  root_domain   = local.account_vars.locals.root_domain
-  zone_name     = "${local.environment}.${local.root_domain}"
+  environment = local.environment_vars.locals.environment
+  root_domain = local.account_vars.locals.root_domain
+  zone_name   = "${local.environment}.${local.root_domain}"
 
   # AJUSTE: subdomínio público da app. DEVE ser igual ao `app_host` em ../alb-target/terragrunt.hcl
   # senão o ALB não roteia a request (host_header não bate).
@@ -43,7 +43,7 @@ inputs = {
       type = "A"
       alias = {
         name                   = dependency.alb.outputs.dns_name
-              zone_id                = dependency.alb.outputs.zone_id
+        zone_id                = dependency.alb.outputs.zone_id
         evaluate_target_health = true
       }
     }
