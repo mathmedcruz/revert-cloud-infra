@@ -36,7 +36,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           role-session-name: gha-terragrunt-plan
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terragrunt run --all plan
         uses: gruntwork-io/terragrunt-action@v3
