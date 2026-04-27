@@ -43,7 +43,7 @@ inputs = {
       type = "A"
       alias = {
         name                   = dependency.alb.outputs.dns_name
-        zone_id                = dependency.alb.outputs.zone_id
+              zone_id                = dependency.alb.outputs.zone_id
         evaluate_target_health = true
       }
     }
