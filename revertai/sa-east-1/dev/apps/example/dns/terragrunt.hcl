@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/terraform-aws-modules/terraform-aws-route53.git//modules/records?ref=v6.4.0"
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-route53.git//.?ref=v6.4.0"
 }
 
 locals {
