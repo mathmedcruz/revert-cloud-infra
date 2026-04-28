@@ -2,6 +2,11 @@ terraform {
   source = "${get_parent_terragrunt_dir()}/modules/alb-target"
 }
 
+# A listener rule é registrada no listener HTTPS:443 do ALB.
+# TLS termina no ALB (cert ACM wildcard *.dev.revertai.com.br) — o tráfego daqui
+# para o container continua HTTP:80 (rede privada, dentro da VPC). A app NÃO precisa
+# lidar com TLS / cert / HTTPS.
+
 locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("environment.hcl"))
   account_vars     = read_terragrunt_config(find_in_parent_folders("account.hcl"))
@@ -35,7 +40,7 @@ dependency "alb" {
   mock_outputs_merge_with_state           = true
   mock_outputs = {
     listeners = {
-      http = { arn = "arn:aws:elasticloadbalancing:sa-east-1:000000000000:listener/app/dummy/00000000/00000000" }
+      https = { arn = "arn:aws:elasticloadbalancing:sa-east-1:000000000000:listener/app/dummy/00000000/00000000" }
     }
   }
 }
@@ -56,7 +61,7 @@ inputs = {
 
   vpc_id           = dependency.vpc.outputs.vpc_id
   container_port   = 80
-  alb_listener_arn = dependency.alb.outputs.listeners["http"].arn
+  alb_listener_arn = dependency.alb.outputs.listeners["https"].arn
   host             = local.app_host
 
   # AJUSTE: prioridade da regra no listener do ALB. DEVE ser única entre todas as apps.
