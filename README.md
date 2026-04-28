@@ -25,7 +25,7 @@ Versões fixadas no workflow `.github/workflows/terragrunt-{plan,apply}.yml`.
 ├── modules/                    # módulos locais reutilizáveis
 │   ├── tags/                   # convenção de tags padrão (Environment, App, ManagedBy)
 │   ├── ecr/                    # ECR repository + lifecycle policy
-│   └── alb-target/             # target group + listener rule (host_header) p/ apps
+│   └── alb-target/             # target group + listener rule (host_header) p/ apps no listener HTTPS
 ├── revertai/                   # account "revertai"
 │   ├── account.hcl             # account_number = get_aws_account_id(), root_domain
 │   ├── _global/                # serviços AWS region-agnostic (Route53)
@@ -95,10 +95,10 @@ s3://<ACCOUNT_ID>-<region>-terraform-remote-state/<app_name>/<path-relative-to-r
 | `tags` | local (`modules/tags`) | Map de tags com `Environment`, `App`, `ManagedBy=terraform` |
 | `vpc` | `terraform-aws-modules/terraform-aws-vpc` v5.21.0 | VPC, 3 subnets públicas + 3 privadas em 3 AZs, NAT gateway único, IGW, route tables |
 | `ecs-cluster` | `terraform-aws-modules/terraform-aws-ecs/cluster` v7.5.0 | Cluster Fargate (capacity provider FARGATE) |
-| `alb` | `terraform-aws-modules/terraform-aws-alb` v9.11.0 | ALB internet-facing, listener HTTP:80 com default action `404`, SG com ingress 0.0.0.0/0 |
+| `alb` | `terraform-aws-modules/terraform-aws-alb` v9.11.0 | ALB internet-facing. Listener HTTP:80 redireciona 301→HTTPS. Listener HTTPS:443 (TLS 1.3-1.2, cert ACM wildcard `*.dev.revertai.com.br`) com default action `404`. SG com ingress 80+443 em 0.0.0.0/0 |
 | `_global/route53/dev-revertai-com-br/route53` | `terraform-aws-modules/terraform-aws-route53` v6.4.0 | Hosted zone pública `dev.revertai.com.br` |
 | `apps/example/ecr` | local (`modules/ecr`) | ECR repository + lifecycle policy |
-| `apps/example/alb-target` | local (`modules/alb-target`) | Target group + listener rule (`host_header` derivado de `account.hcl` + `environment.hcl`) |
+| `apps/example/alb-target` | local (`modules/alb-target`) | Target group + listener rule (`host_header` derivado de `account.hcl` + `environment.hcl`) anexada ao **listener HTTPS:443** do ALB |
 | `apps/example/dns` | `terraform-aws-modules/terraform-aws-route53` v6.4.0 (raiz, `create_zone = false`) | Record A/ALIAS apontando o subdomínio da app pro ALB |
 | `apps/example/service` | `terraform-aws-modules/terraform-aws-ecs/service` v7.5.0 | ECS service Fargate, task definition (1 container nginx:alpine bootstrap), task role + execution role IAM, SG, log group |
 
@@ -112,6 +112,8 @@ Cada aplicação vive em `revertai/<region>/<env>/apps/<app-name>/` com 4 units:
 4. `service/` — ECS service + task definition
 
 **Invariante crítica:** o subdomínio em `dns/` (`app_subdomain`) e o em `alb-target/` (`app_host`) precisam casar. Se divergirem, a query DNS resolve mas o ALB cai na fixed-response 404 do listener (host_header não bate).
+
+**TLS termina no ALB.** O cert ACM wildcard cobre `*.dev.revertai.com.br` — qualquer app nova herda HTTPS sem mudança no código da app. Tráfego ALB → task continua HTTP:80 (rede privada, dentro da VPC). Container expõe HTTP normalmente; não precisa lidar com TLS.
 
 A task definition é só um **bootstrap** (nginx:alpine). CI/CD da aplicação atualiza a task definition em runtime — `ignore_task_definition_changes = true` no terragrunt previne reverter.
 
@@ -165,6 +167,8 @@ Trust policy permite o OIDC provider, condicionada ao repositório. Padrão reco
 Permissions policy do role contém:
 - Acesso ao bucket de state (`s3:Get/Put/Delete/List` em `<ACCOUNT_ID>-sa-east-1-terraform-remote-state`)
 - Permissões de write nos serviços usados pelos módulos: `ec2:*`, `ecs:*`, `elasticloadbalancing:*`, `ecr:*`, `logs:*`, `autoscaling:*`, `application-autoscaling:*`, IAM completo (Create/Delete/Get/List/Tag/PassRole/etc.), `tag:Tag/Untag/Get*`
+- Route53: `Get*`/`List*` em `hostedzone/*` (todas as zones), write actions só em `hostedzone/Z02162213D9FQ8K2T15KD` (zone `dev.revertai.com.br`), `route53:GetChange` em `change/*`
+- ACM: **não precisa** — o cert é referenciado pelo ARN como string opaca; o role não cria/deleta certs (gestão manual no console)
 
 ### 3. Permissions boundary (`terragrunt-pipeline-boundary`)
 
@@ -196,11 +200,31 @@ inputs = {
 `Settings → Secrets and variables → Actions → Variables`:
 - `AWS_ROLE_ARN` = ARN do role criado no passo 2
 
+### 6. Certificado ACM (manual, não IaC)
+
+Cert wildcard pra todas as apps em dev. Criado **uma vez** no console da AWS, gerenciado fora do terraform.
+
+1. Console AWS → **ACM** → região **sa-east-1** (importante: precisa ser a mesma do ALB)
+2. `Request a certificate` → `Public certificate`
+3. **Domain names:**
+   - `*.dev.revertai.com.br` (cobre todas as apps)
+   - `dev.revertai.com.br` (apex, opcional)
+4. **Validation method:** `DNS validation`
+5. Após criar, em **Domains**: clicar `Create records in Route 53` para cada nome (cria os CNAMEs de validação automaticamente)
+6. Aguardar status `Issued` (~5–30 min)
+7. Copiar o ARN e atualizar `local.acm_cert_arn` em `revertai/sa-east-1/dev/alb/terragrunt.hcl`
+
+O ARN do cert é referenciado como string opaca pelo ALB. O role do CI **não precisa** de permissões ACM.
+
+Renovação: ACM renova automaticamente certs validados via DNS — sem intervenção.
+
 ---
 
 ## Bootstrap (primeiro deploy)
 
-Devido ao `data "aws_subnet"` no módulo upstream do ECS service, **`run --all plan` falha antes do primeiro apply**. Solução: aplicar manualmente em ordem de dependência uma vez:
+Devido ao `data "aws_subnet"` no módulo upstream do ECS service, **`run --all plan` falha antes do primeiro apply**. Solução: aplicar manualmente em ordem de dependência uma vez.
+
+**Pré-requisito:** cert ACM já criado no console (ver "Setup AWS → 6. Certificado ACM"). Sem o cert, `apply` do `alb` falha.
 
 ```bash
 cd revertai/sa-east-1/dev
@@ -210,7 +234,7 @@ cd revertai/sa-east-1/dev
 terragrunt apply -auto-approve --working-dir tags
 terragrunt apply -auto-approve --working-dir vpc
 terragrunt apply -auto-approve --working-dir ecs-cluster
-terragrunt apply -auto-approve --working-dir alb
+terragrunt apply -auto-approve --working-dir alb         # consome cert ACM (string ARN em local.acm_cert_arn)
 terragrunt apply -auto-approve --working-dir apps/example/ecr
 terragrunt apply -auto-approve --working-dir apps/example/alb-target
 terragrunt apply -auto-approve --working-dir apps/example/service
@@ -272,6 +296,8 @@ Os 4 units de `apps/example/` têm comentários `# AJUSTE:` em cada ponto que pr
 - [ ] `listener_rule_priority` único entre todas as apps existentes
 - [ ] Porta do `service` (portMappings) bate com `container_port` do `alb-target`
 - [ ] Nome do repo ECR já tem imagem buildada (senão a CI da app vai falhar no primeiro deploy)
+
+**HTTPS é automático**: o cert ACM wildcard `*.dev.revertai.com.br` cobre qualquer subdomínio novo. Não precisa criar/renovar/anexar cert por app — só garantir que o `app_subdomain` está em 1 nível abaixo de `dev.revertai.com.br`.
 
 ### Adicionar um novo recurso que cria role IAM
 

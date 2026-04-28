@@ -8,6 +8,10 @@ locals {
 
   app_name    = local.commons_vars.locals.app_name
   environment = local.environment_vars.locals.environment
+
+  # Certificado ACM gerado manualmente no console (sa-east-1).
+  # Domínio coberto: *.dev.revertai.com.br (validado via DNS na hosted zone).
+  acm_cert_arn = "arn:aws:acm:sa-east-1:175209828699:certificate/c69e0100-c60c-4246-a497-8a7e4309dd5a"
 }
 
 include "root" {
@@ -46,7 +50,14 @@ inputs = {
       to_port     = 80
       ip_protocol = "tcp"
       cidr_ipv4   = "0.0.0.0/0"
-      description = "HTTP from anywhere"
+      description = "HTTP from anywhere (redirected to HTTPS)"
+    }
+    all_https = {
+      from_port   = 443
+      to_port     = 443
+      ip_protocol = "tcp"
+      cidr_ipv4   = "0.0.0.0/0"
+      description = "HTTPS from anywhere"
     }
   }
 
@@ -57,12 +68,25 @@ inputs = {
     }
   }
 
-  # Default action = fixed 404. Each app registers its own listener rule
-  # (created in modules/app/) matched by host_header to forward to its target group.
+  # HTTP listener apenas redireciona para HTTPS (301).
+  # HTTPS é onde as apps registram suas listener rules — default action = fixed 404
+  # quando nenhuma rule (host_header) bate.
   listeners = {
     http = {
       port     = 80
       protocol = "HTTP"
+      redirect = {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    https = {
+      port            = 443
+      protocol        = "HTTPS"
+      ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+      certificate_arn = local.acm_cert_arn
       fixed_response = {
         content_type = "text/plain"
         message_body = "404 Not Found"
