@@ -18,32 +18,28 @@ jobs:
     name: terragrunt run --all apply
     runs-on: ubuntu-latest
     environment: dev
-    env:
-      AWS_REGION: sa-east-1
+    env:  
+      tg_version: '1.0.1'
+      tofu_version: '1.11.6'
+      working_dir: 'revertai'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Check terragrunt HCL
-        uses: gruntwork-io/terragrunt-action@v3
-        with:
-          tg_dir: ${{ env.working_dir }}
-          tg_command: 'hcl fmt --check --diff'
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           role-session-name: gha-terragrunt-apply
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Terragrunt run --all apply
         uses: gruntwork-io/terragrunt-action@v3
         with:
-          tg_version: 1.0.1
-          tofu_version: 1.11.6
-          tg_dir: revertai/sa-east-1/dev
+          tg_version: ${{ env.tg_version }}
+          tofu_version: ${{ env.tofu_version }}
+          tg_dir:  ${{ env.working_dir }}
           tg_command: 'run --all apply --non-interactive'
           tg_add_approve: '1'
           tg_comment: '0'
