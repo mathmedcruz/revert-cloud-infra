@@ -1,0 +1,153 @@
+terraform {
+  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v7.5.0"
+}
+
+locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("environment.hcl"))
+  region_vars      = read_terragrunt_config(find_in_parent_folders("region.hcl"))
+
+  environment = local.environment_vars.locals.environment
+  region      = local.region_vars.locals.region
+
+  # Matches the naming the CircleCI pipeline references.
+  # AJUSTE: troque "example" pelo nome da nova app nos quatro identificadores abaixo.
+  # Esses nomes são referenciados no pipeline da CI — qualquer mudança aqui exige
+  # ajuste correspondente no `aws-ecs/update_task_definition`.
+  service_name = "svc-${local.environment}-python_app"
+  task_family  = "td-${local.environment}-python_app"
+  container    = "python_app"
+  log_group    = "/ecs/${local.environment}/python_app"
+}
+
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+dependency "vpc" {
+  config_path = "../../../vpc"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    private_subnets = ["subnet-00000000", "subnet-00000001", "subnet-00000002"]
+  }
+}
+
+dependency "ecs_cluster" {
+  config_path = "../../../ecs-cluster"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    arn = "arn:aws:ecs:sa-east-1:000000000000:cluster/dummy"
+  }
+}
+
+dependency "alb" {
+  config_path = "../../../alb"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    security_group_id = "sg-00000000"
+  }
+}
+
+dependency "alb_target" {
+  config_path = "../alb-target"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    target_group_arn = "arn:aws:elasticloadbalancing:sa-east-1:000000000000:targetgroup/dummy/00000000"
+  }
+}
+
+dependency "tags" {
+  config_path = "../../../tags"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    tags = {}
+  }
+}
+
+inputs = {
+  name        = local.service_name
+  family      = local.task_family
+  cluster_arn = dependency.ecs_cluster.outputs.arn
+
+  # AJUSTE: tamanho do container Fargate e quantidade de réplicas.
+  cpu           = 512
+  memory        = 1024
+  desired_count = 1
+
+  launch_type      = "FARGATE"
+  assign_public_ip = false
+  subnet_ids       = dependency.vpc.outputs.private_subnets
+
+  # SG created by the module. Ingress from the shared ALB SG on the container port.
+  # v7 of the module uses the newer aws_vpc_security_group_{ingress,egress}_rule
+  # schema: ip_protocol (not protocol), cidr_ipv4 (not cidr_blocks),
+  # referenced_security_group_id (not source_security_group_id).
+  create_security_group = true
+  security_group_name   = "${local.service_name}-task"
+  security_group_ingress_rules = {
+    from_alb = {
+      from_port                    = 8000
+      to_port                      = 8000
+      ip_protocol                  = "tcp"
+      referenced_security_group_id = dependency.alb.outputs.security_group_id
+      description                  = "App port ingress from shared ALB"
+    }
+  }
+  security_group_egress_rules = {
+    all = {
+      ip_protocol = "-1"
+      cidr_ipv4   = "0.0.0.0/0"
+      description = "Allow all outbound"
+    }
+  }
+
+  # Bootstrap container definition. CI replaces image/env on every deploy via
+  # aws-ecs/update_task_definition; ignore_task_definition_changes below keeps
+  # Terraform from reverting those revisions.
+  container_definitions = {
+    (local.container) = {
+      # AJUSTE: imagem inicial só pra subir o ECS. A CI sobrescreve a cada deploy.
+      image                  = "nginx:alpine"
+      essential              = true
+      readonlyRootFilesystem = false
+
+      # AJUSTE: porta que o app escuta dentro do container. Se mudar daqui, ajuste também
+      # `container_port` em ../alb-target/terragrunt.hcl e o ingress rule logo acima.
+      portMappings = [
+        {
+          name          = local.container
+          containerPort = 8000
+          hostPort      = 8000
+          protocol      = "tcp"
+        }
+      ]
+
+      cloudwatch_log_group_name              = local.log_group
+      cloudwatch_log_group_retention_in_days = 14
+    }
+  }
+
+  load_balancer = {
+    service = {
+      target_group_arn = dependency.alb_target.outputs.target_group_arn
+      container_name   = local.container
+      container_port   = 8000
+    }
+  }
+
+  health_check_grace_period_seconds = 60
+
+  # CI owns the task definition after bootstrap.
+  ignore_task_definition_changes = true
+
+  tags = dependency.tags.outputs.tags
+}
