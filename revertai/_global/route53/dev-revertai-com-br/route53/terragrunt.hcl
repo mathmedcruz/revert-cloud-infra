@@ -22,12 +22,6 @@ inputs = {
   name    = local.zone_name
   comment = "${local.environment} hosted zone"
 
-  records = {
-    exemplo = {
-
-    }
-  }
-
   tags = merge(
     {
       Application = local.app_name
