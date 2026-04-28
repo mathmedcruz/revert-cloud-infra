@@ -37,7 +37,10 @@ dependency "alb" {
   config_path = "../../../alb"
 
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_with_state           = true
+  # `deep_map_only` mescla por dentro do map `listeners`. Se usar `true` (shallow),
+  # o `listeners` do state inteiro ganha do mock — e durante a transição em que o
+  # state ainda não tem o listener `https` aplicado, o plan quebra.
+  mock_outputs_merge_strategy_with_state = "deep_map_only"
   mock_outputs = {
     listeners = {
       https = { arn = "arn:aws:elasticloadbalancing:sa-east-1:000000000000:listener/app/dummy/00000000/00000000" }
