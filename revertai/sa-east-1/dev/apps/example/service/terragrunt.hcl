@@ -10,6 +10,9 @@ locals {
   region      = local.region_vars.locals.region
 
   # Matches the naming the CircleCI pipeline references.
+  # AJUSTE: troque "example" pelo nome da nova app nos quatro identificadores abaixo.
+  # Esses nomes são referenciados no pipeline da CI — qualquer mudança aqui exige
+  # ajuste correspondente no `aws-ecs/update_task_definition`.
   service_name = "svc-${local.environment}-example"
   task_family  = "td-${local.environment}-example"
   container    = "example"
@@ -75,9 +78,11 @@ inputs = {
   family      = local.task_family
   cluster_arn = dependency.ecs_cluster.outputs.arn
 
-  cpu              = 256
-  memory           = 512
-  desired_count    = 1
+  # AJUSTE: tamanho do container Fargate e quantidade de réplicas.
+  cpu           = 256
+  memory        = 512
+  desired_count = 1
+
   launch_type      = "FARGATE"
   assign_public_ip = false
   subnet_ids       = dependency.vpc.outputs.private_subnets
@@ -110,10 +115,13 @@ inputs = {
   # Terraform from reverting those revisions.
   container_definitions = {
     (local.container) = {
+      # AJUSTE: imagem inicial só pra subir o ECS. A CI sobrescreve a cada deploy.
       image                  = "nginx:alpine"
       essential              = true
       readonlyRootFilesystem = false
 
+      # AJUSTE: porta que o app escuta dentro do container. Se mudar daqui, ajuste também
+      # `container_port` em ../alb-target/terragrunt.hcl e o ingress rule logo acima.
       portMappings = [
         {
           name          = local.container

@@ -4,7 +4,14 @@ terraform {
 
 locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("environment.hcl"))
-  environment      = local.environment_vars.locals.environment
+  account_vars     = read_terragrunt_config(find_in_parent_folders("account.hcl"))
+
+  environment = local.environment_vars.locals.environment
+  root_domain = local.account_vars.locals.root_domain
+
+  # AJUSTE: hostname público da app. O subdomínio (parte antes do primeiro ".") DEVE
+  # ser igual a `app_subdomain` em ../dns/terragrunt.hcl.
+  app_host = "exemplo.${local.environment}.${local.root_domain}"
 }
 
 include "root" {
@@ -44,13 +51,20 @@ dependency "tags" {
 }
 
 inputs = {
-  name                   = "${local.environment}-example"
-  vpc_id                 = dependency.vpc.outputs.vpc_id
-  container_port         = 80
-  alb_listener_arn       = dependency.alb.outputs.listeners["http"].arn
-  host                   = "exemplo.dev.revertai.com.br"
+  # AJUSTE: nome do target group (limite de 32 chars na AWS, prefixo "tg-" é adicionado pelo módulo).
+  name = "${local.environment}-example"
+
+  vpc_id           = dependency.vpc.outputs.vpc_id
+  container_port   = 80
+  alb_listener_arn = dependency.alb.outputs.listeners["http"].arn
+  host             = local.app_host
+
+  # AJUSTE: prioridade da regra no listener do ALB. DEVE ser única entre todas as apps.
+  # Padrão: incremente de 10 em 10 ao adicionar nova app (100, 110, 120, ...).
   listener_rule_priority = 100
-  health_check_path      = "/"
+
+  # AJUSTE: path do health check do target group.
+  health_check_path = "/"
 
   tags = dependency.tags.outputs.tags
 }
