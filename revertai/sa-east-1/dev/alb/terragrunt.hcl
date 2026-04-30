@@ -8,6 +8,14 @@ locals {
 
   app_name    = local.commons_vars.locals.app_name
   environment = local.environment_vars.locals.environment
+
+  # Certificado ACM criado manualmente na console (sa-east-1).
+  # Cobre 2 níveis simultâneos:
+  # - *.dev.revertai.com.br        (apex tenant, python-app, app, etc.)
+  # - *.api.dev.revertai.com.br    (wildcard tenant do nix_webserver multi-tenant)
+  # Validação DNS via Route53 na zone `dev.revertai.com.br`.
+  # ACM auto-renova enquanto os CNAMEs de validação continuarem na zone.
+  acm_cert_arn = "arn:aws:acm:sa-east-1:175209828699:certificate/125d64e4-1160-4815-b87c-0f7c1212a008"
 }
 
 include "root" {
@@ -22,16 +30,6 @@ dependency "vpc" {
   mock_outputs = {
     vpc_id         = "vpc-00000000"
     public_subnets = ["subnet-00000000", "subnet-00000001", "subnet-00000002"]
-  }
-}
-
-dependency "alb_cert" {
-  config_path = "../alb-cert"
-
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_with_state           = true
-  mock_outputs = {
-    acm_certificate_arn = "arn:aws:acm:sa-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
   }
 }
 
@@ -92,7 +90,7 @@ inputs = {
       port            = 443
       protocol        = "HTTPS"
       ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-      certificate_arn = dependency.alb_cert.outputs.acm_certificate_arn
+      certificate_arn = local.acm_cert_arn
       fixed_response = {
         content_type = "text/plain"
         message_body = "404 Not Found"
