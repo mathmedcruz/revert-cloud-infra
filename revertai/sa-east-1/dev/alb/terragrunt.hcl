@@ -8,10 +8,6 @@ locals {
 
   app_name    = local.commons_vars.locals.app_name
   environment = local.environment_vars.locals.environment
-
-  # Certificado ACM gerado manualmente no console (sa-east-1).
-  # Domínio coberto: *.dev.revertai.com.br (validado via DNS na hosted zone).
-  acm_cert_arn = "arn:aws:acm:sa-east-1:175209828699:certificate/c69e0100-c60c-4246-a497-8a7e4309dd5a"
 }
 
 include "root" {
@@ -26,6 +22,16 @@ dependency "vpc" {
   mock_outputs = {
     vpc_id         = "vpc-00000000"
     public_subnets = ["subnet-00000000", "subnet-00000001", "subnet-00000002"]
+  }
+}
+
+dependency "alb_cert" {
+  config_path = "../alb-cert"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    acm_certificate_arn = "arn:aws:acm:sa-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
   }
 }
 
@@ -86,7 +92,7 @@ inputs = {
       port            = 443
       protocol        = "HTTPS"
       ssl_policy      = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-      certificate_arn = local.acm_cert_arn
+      certificate_arn = dependency.alb_cert.outputs.acm_certificate_arn
       fixed_response = {
         content_type = "text/plain"
         message_body = "404 Not Found"

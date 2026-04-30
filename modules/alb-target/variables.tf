@@ -18,8 +18,8 @@ variable "alb_listener_arn" {
 }
 
 variable "host" {
-  type        = string
-  description = "Host header value routed to this target group (e.g. 'example.dev.internal')."
+  type        = list(string)
+  description = "Host header values routed to this target group. ALB host_header rule aceita até 5 valores; pra app single-host, passar lista de 1 (ex: ['example.dev.internal']). Pra apps multi-tenant, passar apex + wildcard (ex: ['api.dev...', '*.api.dev...'])."
 }
 
 variable "listener_rule_priority" {

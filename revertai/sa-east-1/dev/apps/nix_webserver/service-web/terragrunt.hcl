@@ -9,14 +9,13 @@ locals {
   environment = local.environment_vars.locals.environment
   region      = local.region_vars.locals.region
 
-  # Matches the naming the CircleCI pipeline references.
-  # AJUSTE: troque "example" pelo nome da nova app nos quatro identificadores abaixo.
-  # Esses nomes são referenciados no pipeline da CI — qualquer mudança aqui exige
-  # ajuste correspondente no `aws-ecs/update_task_definition`.
-  service_name = "svc-${local.environment}-example"
-  task_family  = "td-${local.environment}-example"
-  container    = "example"
-  log_group    = "/ecs/${local.environment}/example"
+  # Os 4 identificadores abaixo são referenciados pelo CI no fluxo de deploy
+  # (render-task-definition + deploy-task-definition). Mudar aqui exige
+  # mudança correspondente no .github/workflows/deploy.yml do nix_webserver.
+  service_name = "svc-${local.environment}-nix_webserver-web"
+  task_family  = "td-${local.environment}-nix_webserver-web"
+  container    = "nix_webserver_web"
+  log_group    = "/ecs/${local.environment}/nix_webserver/web"
 }
 
 include "root" {
@@ -78,25 +77,23 @@ inputs = {
   family      = local.task_family
   cluster_arn = dependency.ecs_cluster.outputs.arn
 
-  # AJUSTE: tamanho do container Fargate e quantidade de réplicas.
-  cpu           = 256
-  memory        = 512
+  # AJUSTE: tamanho do container Fargate. Web é o que sustenta tráfego HTTP;
+  # ajustar conforme p99 de latência observado.
+  cpu           = 512
+  memory        = 1024
   desired_count = 1
 
   launch_type      = "FARGATE"
   assign_public_ip = false
   subnet_ids       = dependency.vpc.outputs.private_subnets
 
-  # SG created by the module. Ingress from the shared ALB SG on the container port.
-  # v7 of the module uses the newer aws_vpc_security_group_{ingress,egress}_rule
-  # schema: ip_protocol (not protocol), cidr_ipv4 (not cidr_blocks),
-  # referenced_security_group_id (not source_security_group_id).
+  # SG do task — único service do nix com ingress (recebe do ALB).
   create_security_group = true
   security_group_name   = "${local.service_name}-task"
   security_group_ingress_rules = {
     from_alb = {
-      from_port                    = 80
-      to_port                      = 80
+      from_port                    = 8000
+      to_port                      = 8000
       ip_protocol                  = "tcp"
       referenced_security_group_id = dependency.alb.outputs.security_group_id
       description                  = "App port ingress from shared ALB"
@@ -106,27 +103,23 @@ inputs = {
     all = {
       ip_protocol = "-1"
       cidr_ipv4   = "0.0.0.0/0"
-      description = "Allow all outbound"
+      description = "Allow all outbound (RDS, Redis, S3, external APIs)"
     }
   }
 
-  # Bootstrap container definition. CI replaces image/env on every deploy via
-  # aws-ecs/update_task_definition; ignore_task_definition_changes below keeps
-  # Terraform from reverting those revisions.
+  # Bootstrap container definition. CI sobrescreve image, command, env, secrets
+  # a cada deploy. ignore_task_definition_changes = true preserva essas mudanças.
   container_definitions = {
     (local.container) = {
-      # AJUSTE: imagem inicial só pra subir o ECS. A CI sobrescreve a cada deploy.
       image                  = "nginx:alpine"
       essential              = true
       readonlyRootFilesystem = false
 
-      # AJUSTE: porta que o app escuta dentro do container. Se mudar daqui, ajuste também
-      # `container_port` em ../alb-target/terragrunt.hcl e o ingress rule logo acima.
       portMappings = [
         {
           name          = local.container
-          containerPort = 80
-          hostPort      = 80
+          containerPort = 8000
+          hostPort      = 8000
           protocol      = "tcp"
         }
       ]
@@ -140,13 +133,14 @@ inputs = {
     service = {
       target_group_arn = dependency.alb_target.outputs.target_group_arn
       container_name   = local.container
-      container_port   = 80
+      container_port   = 8000
     }
   }
 
-  health_check_grace_period_seconds = 60
+  # Django + tenants + collectstatic em entrypoint pode levar 60-120s.
+  # 180s = margem confortável (dificuldade #14 do plan).
+  health_check_grace_period_seconds = 180
 
-  # CI owns the task definition after bootstrap.
   ignore_task_definition_changes = true
 
   tags = dependency.tags.outputs.tags
