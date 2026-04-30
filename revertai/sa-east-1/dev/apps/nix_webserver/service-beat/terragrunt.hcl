@@ -97,5 +97,11 @@ inputs = {
 
   ignore_task_definition_changes = true
 
+  # IAM role names curtos (limite AWS name_prefix = 38 chars; default estouraria).
+  task_exec_iam_role_use_name_prefix = false
+  task_exec_iam_role_name            = "dev-nix-beat-exec"
+  tasks_iam_role_use_name_prefix     = false
+  tasks_iam_role_name                = "dev-nix-beat-task"
+
   tags = dependency.tags.outputs.tags
 }

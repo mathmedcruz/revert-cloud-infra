@@ -143,5 +143,13 @@ inputs = {
 
   ignore_task_definition_changes = true
 
+  # IAM role names curtos (não usar name_prefix) — limite AWS é 38 chars com prefix.
+  # Default `${service_name}-tasks-` estoura: `svc-dev-nix_webserver-web-tasks-` = 32+
+  # No worker-high estoura por +5 chars. Valor fixo evita reservar caractere extra do random suffix.
+  task_exec_iam_role_use_name_prefix = false
+  task_exec_iam_role_name            = "dev-nix-web-exec"
+  tasks_iam_role_use_name_prefix     = false
+  tasks_iam_role_name                = "dev-nix-web-task"
+
   tags = dependency.tags.outputs.tags
 }
