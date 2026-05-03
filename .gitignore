@@ -8,6 +8,7 @@
 
 # Local terragrunt directories
 **/.terragrunt-cache/
+**/.terraform.lock.hcl
 
 # State files
 *.tfstate

@@ -9,9 +9,13 @@ locals {
   app_name    = local.commons_vars.locals.app_name
   environment = local.environment_vars.locals.environment
 
-  # Certificado ACM gerado manualmente no console (sa-east-1).
-  # Domínio coberto: *.dev.revertai.com.br (validado via DNS na hosted zone).
-  acm_cert_arn = "arn:aws:acm:sa-east-1:175209828699:certificate/c69e0100-c60c-4246-a497-8a7e4309dd5a"
+  # Certificado ACM criado manualmente na console (sa-east-1).
+  # Cobre 2 domínios:
+  # - *.dev.revertai.com.br        (api, python-app, ekho, etc. — 1 nível)
+  # - *.api.dev.revertai.com.br    (tenants do nix_webserver — 2 níveis)
+  # Validação DNS via Route53 na zone `dev.revertai.com.br`.
+  # ACM auto-renova enquanto os CNAMEs de validação continuarem na zone.
+  acm_cert_arn = "arn:aws:acm:sa-east-1:175209828699:certificate/125d64e4-1160-4815-b87c-0f7c1212a008"
 }
 
 include "root" {

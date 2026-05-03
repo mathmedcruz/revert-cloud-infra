@@ -30,7 +30,7 @@ resource "aws_lb_listener_rule" "this" {
 
   condition {
     host_header {
-      values = [var.host]
+      values = var.host
     }
   }
 

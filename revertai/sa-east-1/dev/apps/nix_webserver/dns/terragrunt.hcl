@@ -10,9 +10,12 @@ locals {
   root_domain = local.account_vars.locals.root_domain
   zone_name   = "${local.environment}.${local.root_domain}"
 
-  # AJUSTE: subdomínio público da app. DEVE ser igual ao `app_host` em ../alb-target/terragrunt.hcl
-  # senão o ALB não roteia a request (host_header não bate).
-  app_subdomain = "exemplo"
+  # Multi-tenant: 2 records no mesmo ALB.
+  # - api → apex (rotas shared)
+  # - *.api → wildcard (1 record cobre todos os tenants)
+  # Subdomínios DEVEM casar com `host` em ../alb-target/terragrunt.hcl.
+  app_apex_subdomain     = "api"
+  app_wildcard_subdomain = "*.api"
 }
 
 include "root" {
@@ -39,7 +42,15 @@ inputs = {
   name        = local.zone_name
 
   records = {
-    (local.app_subdomain) = {
+    (local.app_apex_subdomain) = {
+      type = "A"
+      alias = {
+        name                   = dependency.alb.outputs.dns_name
+        zone_id                = dependency.alb.outputs.zone_id
+        evaluate_target_health = true
+      }
+    }
+    (local.app_wildcard_subdomain) = {
       type = "A"
       alias = {
         name                   = dependency.alb.outputs.dns_name

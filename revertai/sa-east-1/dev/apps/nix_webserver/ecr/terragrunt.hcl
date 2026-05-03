@@ -22,8 +22,9 @@ dependency "tags" {
 }
 
 inputs = {
-  # AJUSTE: nome do repositório ECR — vira "<env>-<app>".
-  name = "${local.environment}-example"
+  # Repo único compartilhado pelos 5 services (web + 3 workers + beat).
+  # A diferença entre eles é o `command` no task-def, não a imagem.
+  name = "${local.environment}-nix_webserver"
 
   tags = dependency.tags.outputs.tags
 }
