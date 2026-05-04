@@ -52,6 +52,17 @@ dependency "tags" {
   }
 }
 
+dependency "iam" {
+  config_path = "../iam"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    task_exec_iam_role_arn = "arn:aws:iam::000000000000:role/dummy-exec"
+    tasks_iam_role_arn     = "arn:aws:iam::000000000000:role/dummy-task"
+  }
+}
+
 inputs = {
   name        = local.service_name
   family      = local.task_family
@@ -89,11 +100,11 @@ inputs = {
 
   ignore_task_definition_changes = true
 
-  # IAM role names curtos (limite AWS name_prefix = 38 chars; default estouraria).
-  task_exec_iam_role_use_name_prefix = false
-  task_exec_iam_role_name            = "dev-nix-wrk-low-exec"
-  tasks_iam_role_use_name_prefix     = false
-  tasks_iam_role_name                = "dev-nix-wrk-low-task"
+  # Roles compartilhadas entre todos os services do nix_webserver — criadas em ../iam.
+  create_task_exec_iam_role = false
+  task_exec_iam_role_arn    = dependency.iam.outputs.task_exec_iam_role_arn
+  create_tasks_iam_role     = false
+  tasks_iam_role_arn        = dependency.iam.outputs.tasks_iam_role_arn
 
   tags = dependency.tags.outputs.tags
 }
