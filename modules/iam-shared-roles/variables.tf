@@ -18,3 +18,27 @@ variable "tags" {
   description = "Tags aplicadas em ambas as roles."
   default     = {}
 }
+
+variable "exec_managed_policy_arns" {
+  type        = list(string)
+  description = "ARNs de policies (AWS-managed ou customer-managed) a anexar à execution role."
+  default     = []
+}
+
+variable "exec_inline_policies" {
+  type        = map(string)
+  description = "Inline policies extras anexadas à execution role. Map de nome → JSON."
+  default     = {}
+}
+
+variable "task_managed_policy_arns" {
+  type        = list(string)
+  description = "ARNs de policies a anexar à tasks role."
+  default     = []
+}
+
+variable "task_inline_policies" {
+  type        = map(string)
+  description = "Inline policies anexadas à tasks role. Map de nome → JSON."
+  default     = {}
+}

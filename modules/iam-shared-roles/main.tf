@@ -95,3 +95,34 @@ resource "aws_iam_role" "task" {
   assume_role_policy = data.aws_iam_policy_document.task_assume.json
   tags               = var.tags
 }
+
+# ===== Policies adicionais (opcionais) =====
+# Suporte a anexar policies extras nas duas roles sem precisar modificar o
+# módulo. Use managed_policy_arns para AWS-managed/customer-managed e
+# inline_policies (map de nome → JSON) para policies inline.
+
+resource "aws_iam_role_policy_attachment" "exec_managed" {
+  for_each   = toset(var.exec_managed_policy_arns)
+  role       = aws_iam_role.exec.name
+  policy_arn = each.value
+}
+
+resource "aws_iam_role_policy" "exec_extra_inline" {
+  for_each = var.exec_inline_policies
+  name     = each.key
+  role     = aws_iam_role.exec.id
+  policy   = each.value
+}
+
+resource "aws_iam_role_policy_attachment" "task_managed" {
+  for_each   = toset(var.task_managed_policy_arns)
+  role       = aws_iam_role.task.name
+  policy_arn = each.value
+}
+
+resource "aws_iam_role_policy" "task_extra_inline" {
+  for_each = var.task_inline_policies
+  name     = each.key
+  role     = aws_iam_role.task.id
+  policy   = each.value
+}
