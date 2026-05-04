@@ -1,0 +1,50 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "RDSFullForInstancesAndParamGroups",
+            "Effect": "Allow",
+            "Action": [
+                "rds:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ElastiCacheFullForRedis",
+            "Effect": "Allow",
+            "Action": [
+                "elasticache:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "SecretsManagerForRedisAuthToken",
+            "Effect": "Allow",
+            "Action": [
+                "secretsmanager:CreateSecret",
+                "secretsmanager:DeleteSecret",
+                "secretsmanager:DescribeSecret",
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:GetResourcePolicy",
+                "secretsmanager:ListSecretVersionIds",
+                "secretsmanager:PutSecretValue",
+                "secretsmanager:UpdateSecret",
+                "secretsmanager:RestoreSecret",
+                "secretsmanager:TagResource",
+                "secretsmanager:UntagResource"
+            ],
+            "Resource": "arn:aws:secretsmanager:sa-east-1:175209828699:secret:rvt-dev-nix-redis*"
+        },
+        {
+            "Sid": "S3BucketNixUploads",
+            "Effect": "Allow",
+            "Action": [
+                "s3:*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::rvt-dev-nix-uploads",
+                "arn:aws:s3:::rvt-dev-nix-uploads/*"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,163 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Route53ReadOnlyAllZones",
+            "Effect": "Allow",
+            "Action": [
+                "route53:GetHostedZone",
+                "route53:ListResourceRecordSets",
+                "route53:ListTagsForResource",
+                "route53:GetDNSSEC",
+                "route53:GetHostedZoneLimit"
+            ],
+            "Resource": "arn:aws:route53:::hostedzone/*"
+        },
+        {
+            "Sid": "Route53WriteOnDevZone",
+            "Effect": "Allow",
+            "Action": [
+                "route53:UpdateHostedZoneComment",
+                "route53:ChangeResourceRecordSets",
+                "route53:ChangeTagsForResource",
+                "route53:EnableHostedZoneDNSSEC",
+                "route53:DisableHostedZoneDNSSEC"
+            ],
+            "Resource": "arn:aws:route53:::hostedzone/Z02162213D9FQ8K2T15KD"
+        },
+        {
+            "Sid": "Route53AccountLevelLists",
+            "Effect": "Allow",
+            "Action": [
+                "route53:ListHostedZones",
+                "route53:ListHostedZonesByName",
+                "route53:GetHostedZoneCount"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Route53GetChangeStatus",
+            "Effect": "Allow",
+            "Action": [
+                "route53:GetChange"
+            ],
+            "Resource": "arn:aws:route53:::change/*"
+        },
+        {
+            "Sid": "EC2FullForVPCAndSG",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ECSFullForClusterAndService",
+            "Effect": "Allow",
+            "Action": [
+                "ecs:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ELBv2FullForALBAndTargetGroups",
+            "Effect": "Allow",
+            "Action": [
+                "elasticloadbalancing:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ECRFullForRepositories",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "LogsFullForCloudWatchLogGroups",
+            "Effect": "Allow",
+            "Action": [
+                "logs:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "AutoScalingForECSService",
+            "Effect": "Allow",
+            "Action": [
+                "autoscaling:*",
+                "application-autoscaling:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "IAMForTaskAndExecutionRoles",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:ListRoles",
+                "iam:UpdateRole",
+                "iam:UpdateAssumeRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion",
+                "iam:ListPolicies",
+                "iam:ListPolicyVersions",
+                "iam:CreatePolicyVersion",
+                "iam:DeletePolicyVersion",
+                "iam:TagRole",
+                "iam:UntagRole",
+                "iam:TagPolicy",
+                "iam:UntagPolicy",
+                "iam:PassRole",
+                "iam:CreateServiceLinkedRole"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "TaggingAPI",
+            "Effect": "Allow",
+            "Action": [
+                "tag:GetResources",
+                "tag:TagResources",
+                "tag:UntagResources",
+                "tag:GetTagKeys",
+                "tag:GetTagValues"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "TerraformStateBucketList",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketVersioning",
+                "s3:GetBucketLocation",
+                "s3:GetEncryptionConfiguration"
+            ],
+            "Resource": "arn:aws:s3:::175209828699-sa-east-1-terraform-remote-state"
+        },
+        {
+            "Sid": "TerraformStateObjectAccess",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::175209828699-sa-east-1-terraform-remote-state/*"
+        }
+    ]
+}
