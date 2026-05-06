@@ -6,13 +6,32 @@
 # nix_webserver registra revision 2, 3, 4... e atualiza o service via
 # UpdateService.
 #
-# `lifecycle.ignore_changes = all` faz Terraform NUNCA mais comparar essa
-# task-def com o estado real ou com o código. Mesmo se você bumpar a versão
-# do módulo upstream, mudar cpu/memory aqui, ou se a revision 1 for
-# deregistered manualmente em AWS, plan ignora.
-#
-# A revision 1 vira fóssil — ninguém usa após o primeiro deploy do CI.
+# Proteção do estado da aplicação está em `ignore_task_definition_changes`
+# DO SERVICE (módulo upstream), que segura o service pointer no que o CI
+# definiu. Esta resource (bootstrap) NÃO tem ignore_changes — se você mudar
+# algo aqui, replace acontece, mas como o service ignora task_definition
+# changes, o app continua rodando o que o CI cravou. As revisions antigas
+# do bootstrap viram fósseis (deregistered, nada referencia).
 # ============================================================================
+
+locals {
+  # Se o service tem load_balancer, ECS exige que o container declarado em
+  # `loadBalancer.containerName` tenha o `loadBalancer.containerPort` em
+  # `portMappings`. Senão, CreateService falha:
+  #   "The container X did not have a container port Y defined"
+  #
+  # Workers/beat passam load_balancer=null → portMappings vazio (não escutam
+  # porta). Web passa o map com container_port=8000 → portMapping é incluído.
+  bootstrap_port_mappings = try(
+    [{
+      name          = var.container_name
+      containerPort = var.load_balancer.service.container_port
+      hostPort      = var.load_balancer.service.container_port
+      protocol      = "tcp"
+    }],
+    []
+  )
+}
 
 resource "aws_ecs_task_definition" "bootstrap" {
   family                   = var.family
@@ -31,17 +50,18 @@ resource "aws_ecs_task_definition" "bootstrap" {
 
   container_definitions = jsonencode([
     {
-      name      = var.container_name
-      image     = "public.ecr.aws/docker/library/busybox:latest"
-      essential = true
-      command   = ["sh", "-c", "sleep infinity"]
+      name         = var.container_name
+      image        = "public.ecr.aws/docker/library/busybox:latest"
+      essential    = true
+      command      = ["sh", "-c", "sleep infinity"]
+      portMappings = local.bootstrap_port_mappings
     }
   ])
 
   tags = var.tags
 
   lifecycle {
-    ignore_changes = all
+    create_before_destroy = true
   }
 }
 
