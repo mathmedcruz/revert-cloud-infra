@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v7.5.0"
+  source = "${get_parent_terragrunt_dir()}/modules/ecs-service-app-managed"
 }
 
 locals {
@@ -9,13 +9,12 @@ locals {
   environment = local.environment_vars.locals.environment
   region      = local.region_vars.locals.region
 
-  # Os 4 identificadores abaixo são referenciados pelo CI no fluxo de deploy
-  # (render-task-definition + deploy-task-definition). Mudar aqui exige
-  # mudança correspondente no .github/workflows/deploy.yml do nix_webserver.
+  # Identificadores referenciados pelo CI no fluxo de deploy
+  # (.github/workflows/_deploy.yml do nix_webserver). Mudar aqui exige
+  # mudança correspondente no workflow.
   service_name = "svc-${local.environment}-nix_webserver-web"
   task_family  = "td-${local.environment}-nix_webserver-web"
   container    = "nix_webserver_web"
-  log_group    = "/ecs/${local.environment}/nix_webserver/web"
 }
 
 include "root" {
@@ -84,23 +83,20 @@ dependency "iam" {
 }
 
 inputs = {
-  name        = local.service_name
-  family      = local.task_family
-  cluster_arn = dependency.ecs_cluster.outputs.arn
+  name           = local.service_name
+  family         = local.task_family
+  container_name = local.container
+  cluster_arn    = dependency.ecs_cluster.outputs.arn
+  region         = local.region
+  subnet_ids     = dependency.vpc.outputs.private_subnets
 
-  # AJUSTE: tamanho do container Fargate. Web é o que sustenta tráfego HTTP;
-  # ajustar conforme p99 de latência observado.
-  cpu           = 512
-  memory        = 1024
+  task_exec_iam_role_arn = dependency.iam.outputs.task_exec_iam_role_arn
+  tasks_iam_role_arn     = dependency.iam.outputs.tasks_iam_role_arn
+
   desired_count = 1
 
-  launch_type      = "FARGATE"
-  assign_public_ip = false
-  subnet_ids       = dependency.vpc.outputs.private_subnets
-
   # SG do task — único service do nix com ingress (recebe do ALB).
-  create_security_group = true
-  security_group_name   = "${local.service_name}-task"
+  security_group_name = "${local.service_name}-task"
   security_group_ingress_rules = {
     from_alb = {
       from_port                    = 8000
@@ -118,47 +114,18 @@ inputs = {
     }
   }
 
-  # Bootstrap container definition. CI sobrescreve image, command, env, secrets
-  # a cada deploy. ignore_task_definition_changes = true preserva essas mudanças.
-  container_definitions = {
-    (local.container) = {
-      image                  = "nginx:alpine"
-      essential              = true
-      readonlyRootFilesystem = false
-
-      portMappings = [
-        {
-          name          = local.container
-          containerPort = 8000
-          hostPort      = 8000
-          protocol      = "tcp"
-        }
-      ]
-
-      cloudwatch_log_group_name              = local.log_group
-      cloudwatch_log_group_retention_in_days = 14
-    }
-  }
-
   load_balancer = {
     service = {
       target_group_arn = dependency.alb_target.outputs.target_group_arn
-      container_name   = local.container
-      container_port   = 8000
+      # container_name TEM que bater com o `name` em
+      # nix_webserver/task-definitions/web.json (`nix_webserver_web`).
+      container_name = local.container
+      container_port = 8000
     }
   }
 
   # Django + tenants + collectstatic em entrypoint pode levar 60-120s.
-  # 180s = margem confortável (dificuldade #14 do plan).
   health_check_grace_period_seconds = 180
-
-  ignore_task_definition_changes = true
-
-  # Roles compartilhadas entre todos os services do nix_webserver — criadas em ../iam.
-  create_task_exec_iam_role = false
-  task_exec_iam_role_arn    = dependency.iam.outputs.task_exec_iam_role_arn
-  create_tasks_iam_role     = false
-  tasks_iam_role_arn        = dependency.iam.outputs.tasks_iam_role_arn
 
   tags = dependency.tags.outputs.tags
 }
