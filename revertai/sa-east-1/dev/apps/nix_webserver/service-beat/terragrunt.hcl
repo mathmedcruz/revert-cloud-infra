@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/terraform-aws-modules/terraform-aws-ecs.git//modules/service?ref=v7.5.0"
+  source = "${get_parent_terragrunt_dir()}/modules/ecs-service-app-managed"
 }
 
 locals {
@@ -16,7 +16,6 @@ locals {
   service_name = "svc-${local.environment}-nix_webserver-beat"
   task_family  = "td-${local.environment}-nix_webserver-beat"
   container    = "nix_webserver_beat"
-  log_group    = "/ecs/${local.environment}/nix_webserver/beat"
 }
 
 include "root" {
@@ -65,20 +64,18 @@ dependency "iam" {
 }
 
 inputs = {
-  name        = local.service_name
-  family      = local.task_family
-  cluster_arn = dependency.ecs_cluster.outputs.arn
+  name           = local.service_name
+  family         = local.task_family
+  container_name = local.container
+  cluster_arn    = dependency.ecs_cluster.outputs.arn
+  region         = local.region
+  subnet_ids     = dependency.vpc.outputs.private_subnets
 
-  # Beat é leve (só agenda, não processa) — 0.25 vCPU / 512MB basta.
-  cpu           = 256
-  memory        = 512
+  task_exec_iam_role_arn = dependency.iam.outputs.task_exec_iam_role_arn
+  tasks_iam_role_arn     = dependency.iam.outputs.tasks_iam_role_arn
+
   desired_count = 1
 
-  launch_type      = "FARGATE"
-  assign_public_ip = false
-  subnet_ids       = dependency.vpc.outputs.private_subnets
-
-  create_security_group        = true
   security_group_name          = "${local.service_name}-task"
   security_group_ingress_rules = {}
   security_group_egress_rules = {
@@ -89,30 +86,11 @@ inputs = {
     }
   }
 
-  container_definitions = {
-    (local.container) = {
-      image                  = "nginx:alpine"
-      essential              = true
-      readonlyRootFilesystem = false
-
-      cloudwatch_log_group_name              = local.log_group
-      cloudwatch_log_group_retention_in_days = 14
-    }
-  }
-
   # Crítico: durante deploy, ECS DEVE matar a task antiga ANTES de subir a nova.
   # Default (min=100, max=200) sobreporia 2 instâncias por ~30s. Trade-off
   # aceito: ~30-60s sem beat durante rollout (scheduler é tolerante).
   deployment_minimum_healthy_percent = 0
   deployment_maximum_percent         = 100
-
-  ignore_task_definition_changes = true
-
-  # Roles compartilhadas entre todos os services do nix_webserver — criadas em ../iam.
-  create_task_exec_iam_role = false
-  task_exec_iam_role_arn    = dependency.iam.outputs.task_exec_iam_role_arn
-  create_tasks_iam_role     = false
-  tasks_iam_role_arn        = dependency.iam.outputs.tasks_iam_role_arn
 
   tags = dependency.tags.outputs.tags
 }
