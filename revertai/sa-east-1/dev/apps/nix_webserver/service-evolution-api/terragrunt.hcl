@@ -98,5 +98,24 @@ inputs = {
     }
   }
 
+  # Service Connect SERVER. Publica alias `evolution-api:8080` no namespace
+  # default do cluster (rvt-${env}.local). Web/workers resolvem
+  # `http://evolution-api.rvt-dev.local:8080` via envoy sidecar.
+  #
+  # `port_name` TEM que bater com `portMappings[].name` em
+  # nix_webserver/task-definitions/evolution-api.json (`evolution-api-8080`).
+  # Mismatch → ECS aceita config mas NÃO publica o alias.
+  service_connect_configuration = {
+    enabled = true
+    service = [{
+      port_name      = "evolution-api-8080"
+      discovery_name = "evolution-api"
+      client_alias = {
+        port     = 8080
+        dns_name = "evolution-api"
+      }
+    }]
+  }
+
   tags = dependency.tags.outputs.tags
 }

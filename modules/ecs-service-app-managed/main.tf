@@ -110,5 +110,9 @@ module "service" {
   create_tasks_iam_role     = false
   tasks_iam_role_arn        = var.tasks_iam_role_arn
 
+  # Service Connect: passa o map cru pro upstream. {} = SC desligado.
+  # Quando ligado, ECS injeta envoy sidecar automático na task.
+  service_connect_configuration = var.service_connect_configuration
+
   tags = var.tags
 }
