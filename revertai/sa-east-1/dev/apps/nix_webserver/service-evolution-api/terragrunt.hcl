@@ -110,10 +110,10 @@ inputs = {
     service = [{
       port_name      = "evolution-api-8080"
       discovery_name = "evolution-api"
-      client_alias = [{
+      client_alias = {
         port     = 8080
         dns_name = "evolution-api"
-      }]
+      }
     }]
   }
 

@@ -117,7 +117,7 @@ variable "service_connect_configuration" {
     Config de Service Connect. {} (default) = sem SC. Cluster precisa ter
     `service_connect_defaults.namespace` setado pra dispensar passar `namespace`
     aqui. Modos:
-      - Server (publica alias): { enabled = true, service = [{ port_name, client_alias = [...] }] }
+      - Server (publica alias): { enabled = true, service = [{ port_name, client_alias = { ... } }] }
       - Client only (resolve aliases): { enabled = true } (sem `service`)
     O envoy sidecar adiciona ~256 MiB de memory + ~50 mCPU por task — confirmar
     que cpu/memory da task-def comporta antes de habilitar.
