@@ -39,7 +39,8 @@ Versões fixadas no workflow `.github/workflows/terragrunt-{plan,apply}.yml`.
 │           ├── environment.hcl # environment, vpc_cidr, custom_tags
 │           ├── tags/           # módulo tags (compartilhado pelo env)
 │           ├── vpc/            # terraform-aws-modules/vpc v5.21.0
-│           ├── ecs-cluster/    # terraform-aws-modules/ecs/cluster v7.5.0
+│           ├── ecs-cluster/    # terraform-aws-modules/ecs/cluster v7.5.0 + service_connect_defaults
+│           ├── cloudmap/       # aws_service_discovery_http_namespace (rvt-<env>.local) p/ Service Connect
 │           ├── alb/            # terraform-aws-modules/alb v9.11.0
 │           └── apps/
 │               └── example/    # aplicação de exemplo
@@ -94,7 +95,8 @@ s3://<ACCOUNT_ID>-<region>-terraform-remote-state/<app_name>/<path-relative-to-r
 |---|---|---|
 | `tags` | local (`modules/tags`) | Map de tags com `Environment`, `App`, `ManagedBy=terraform` |
 | `vpc` | `terraform-aws-modules/terraform-aws-vpc` v5.21.0 | VPC, 3 subnets públicas + 3 privadas em 3 AZs, NAT gateway único, IGW, route tables |
-| `ecs-cluster` | `terraform-aws-modules/terraform-aws-ecs/cluster` v7.5.0 | Cluster Fargate (capacity provider FARGATE) |
+| `ecs-cluster` | `terraform-aws-modules/terraform-aws-ecs/cluster` v7.5.0 | Cluster Fargate (capacity provider FARGATE) + `service_connect_defaults.namespace` herdado de `cloudmap/` |
+| `cloudmap` | `aws_service_discovery_http_namespace` (inline no terragrunt) | Namespace `rvt-<env>.local` usado por ECS Service Connect — ver [`docs/service-connect.md`](docs/service-connect.md) |
 | `alb` | `terraform-aws-modules/terraform-aws-alb` v9.11.0 | ALB internet-facing. Listener HTTP:80 redireciona 301→HTTPS. Listener HTTPS:443 (TLS 1.3-1.2, cert ACM wildcard `*.dev.revertai.com.br`) com default action `404`. SG com ingress 80+443 em 0.0.0.0/0 |
 | `_global/route53/dev-revertai-com-br/route53` | `terraform-aws-modules/terraform-aws-route53` v6.4.0 | Hosted zone pública `dev.revertai.com.br` |
 | `apps/example/ecr` | local (`modules/ecr`) | ECR repository + lifecycle policy |
@@ -116,6 +118,15 @@ Cada aplicação vive em `revertai/<region>/<env>/apps/<app-name>/` com 4 units:
 **TLS termina no ALB.** O cert ACM wildcard cobre `*.dev.revertai.com.br` — qualquer app nova herda HTTPS sem mudança no código da app. Tráfego ALB → task continua HTTP:80 (rede privada, dentro da VPC). Container expõe HTTP normalmente; não precisa lidar com TLS.
 
 A task definition é só um **bootstrap** (nginx:alpine). CI/CD da aplicação atualiza a task definition em runtime — `ignore_task_definition_changes = true` no terragrunt previne reverter.
+
+### Comunicação service-to-service (ECS Service Connect)
+
+Pra services dentro do mesmo cluster que conversam entre si (ex.: workers chamando uma API interna), o padrão é **ECS Service Connect** com namespace HTTP do Cloud Map (`rvt-<env>.local`). Cada service ECS opta-in via `service_connect_configuration` no terragrunt:
+
+- **Server** (publica alias): declara `service[]` com `port_name`, `discovery_name`, `client_alias`. Apps remotas resolvem via `http://<alias>.rvt-<env>.local:<porta>`.
+- **Client** (só consome): basta `{ enabled = true }`. ECS injeta envoy sidecar que intercepta chamadas via iptables.
+
+O cluster ECS herda o namespace default de `cloudmap/` (`service_connect_defaults`), então services não precisam declarar `namespace` individualmente. Detalhes completos (data plane, troubleshooting, migração de Cloud Map clássico) em [`docs/service-connect.md`](docs/service-connect.md).
 
 ---
 
