@@ -85,5 +85,10 @@ inputs = {
     }
   }
 
+  # Service Connect CLIENT-only — resolve evolution-api.rvt-dev.local:8080.
+  service_connect_configuration = {
+    enabled = true
+  }
+
   tags = dependency.tags.outputs.tags
 }
