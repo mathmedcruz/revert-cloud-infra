@@ -112,11 +112,13 @@ variable "deployment_maximum_percent" {
 
 variable "service_connect_configuration" {
   type        = any
-  default     = {}
+  default     = null
   description = <<-EOT
     Config de Service Connect (alternativa ao Cloud Map clássico — usar UM dos dois).
-    {} (default) = sem SC. Cluster precisa ter `service_connect_defaults.namespace`
-    setado pra dispensar passar `namespace` aqui. Modos:
+    null (default) = sem SC. {} também ligaria SC porque o upstream tipa esse
+    input como object com `enabled = optional(bool, true)` — `{}` faria o `for_each`
+    do upstream criar o bloco com `enabled = true` e quebrar no apply quando o
+    cluster não tem `service_connect_defaults.namespace`. Modos:
       - Server (publica alias): { enabled = true, service = [{ port_name, client_alias = { ... } }] }
       - Client only (resolve aliases): { enabled = true } (sem `service`)
     O envoy sidecar adiciona ~256 MiB de memory + ~50 mCPU por task — confirmar
