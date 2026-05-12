@@ -86,11 +86,9 @@ inputs = {
     }
   }
 
-  # Service Connect CLIENT-only — resolve evolution-api.rvt-dev.local:8080.
-  # Worker-agent é o que mais usa evolution (LLM agents → WhatsApp).
-  service_connect_configuration = {
-    enabled = true
-  }
+  # Sem Service Connect: worker-agent (consumer mais ativo de evolution-api)
+  # resolve evolution-api.rvt-dev.local:8080 via Route53 VPC resolver
+  # (Cloud Map Private DNS), nativamente sem envoy.
 
   tags = dependency.tags.outputs.tags
 }

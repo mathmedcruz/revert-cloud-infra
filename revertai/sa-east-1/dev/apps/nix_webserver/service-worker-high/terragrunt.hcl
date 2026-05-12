@@ -86,12 +86,9 @@ inputs = {
     }
   }
 
-  # Service Connect CLIENT-only. Worker chama evolution-api via Celery task
-  # → DRF view → http://evolution-api.rvt-dev.local:8080. Envoy sidecar
-  # resolve o alias. Não publica nada (workers não recebem inbound).
-  service_connect_configuration = {
-    enabled = true
-  }
+  # Sem Service Connect: Celery worker chama evolution-api via Route53 VPC
+  # resolver (Cloud Map Private DNS) — http://evolution-api.rvt-dev.local:8080
+  # resolve nativamente, sem envoy.
 
   tags = dependency.tags.outputs.tags
 }

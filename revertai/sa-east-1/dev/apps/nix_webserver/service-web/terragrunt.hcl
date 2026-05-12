@@ -127,14 +127,9 @@ inputs = {
   # Django + tenants + collectstatic em entrypoint pode levar 60-120s.
   health_check_grace_period_seconds = 180
 
-  # Service Connect CLIENT-only. Sem `service` = não publica alias (web é
-  # alcançado via ALB, não via SC). Apenas habilita o envoy sidecar pra
-  # resolver `evolution-api.rvt-dev.local:8080` quando o app chama
-  # EVOLUTION_API_URL.
-  # Namespace herda do cluster (service_connect_defaults).
-  service_connect_configuration = {
-    enabled = true
-  }
+  # Sem Service Connect: a resolução de `evolution-api.rvt-dev.local:8080` é
+  # feita via Route53 VPC resolver (Cloud Map Private DNS namespace). App chama
+  # o hostname normalmente, sem envoy sidecar no meio.
 
   tags = dependency.tags.outputs.tags
 }

@@ -64,6 +64,19 @@ dependency "iam" {
   }
 }
 
+# Cloud Map Private DNS namespace (rvt-${env}.local). Single source — outros
+# services NÃO precisam dessa dependência porque só consomem o DNS resolvido
+# pelo Route53 VPC resolver. Só o "server" (que registra A records) precisa.
+dependency "cloudmap" {
+  config_path = "../../../cloudmap"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_with_state           = true
+  mock_outputs = {
+    namespace_id = "ns-mock00000000"
+  }
+}
+
 inputs = {
   name           = local.service_name
   family         = local.task_family
@@ -98,24 +111,18 @@ inputs = {
     }
   }
 
-  # Service Connect SERVER. Publica alias `evolution-api:8080` no namespace
-  # default do cluster (rvt-${env}.local). Web/workers resolvem
-  # `http://evolution-api.rvt-dev.local:8080` via envoy sidecar.
+  # Cloud Map clássico (Private DNS). Registra A records (multivalue) em
+  # `evolution-api.rvt-${env}.local` apontando pros IPs das tasks vivas.
+  # Web/workers resolvem via Route53 VPC resolver (DNS nativo) — sem envoy.
   #
-  # `port_name` TEM que bater com `portMappings[].name` em
-  # nix_webserver/task-definitions/evolution-api.json (`evolution-api-8080`).
-  # Mismatch → ECS aceita config mas NÃO publica o alias.
-  service_connect_configuration = {
-    enabled = true
-    service = [{
-      port_name      = "evolution-api-8080"
-      discovery_name = "evolution-api"
-      client_alias = {
-        port     = 8080
-        dns_name = "evolution-api"
-      }
-    }]
+  # `container_port = 8080` precisa bater com a porta que a Evolution escuta
+  # em `nix_webserver/task-definitions/evolution-api.json` (containerPort).
+  cloud_map_service = {
+    name           = "evolution-api"
+    ttl            = 30
+    container_port = 8080
   }
+  cloud_map_namespace_id = dependency.cloudmap.outputs.namespace_id
 
   tags = dependency.tags.outputs.tags
 }

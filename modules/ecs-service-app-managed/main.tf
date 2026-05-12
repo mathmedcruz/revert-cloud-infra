@@ -66,6 +66,44 @@ resource "aws_ecs_task_definition" "bootstrap" {
 }
 
 # ============================================================================
+# Cloud Map service discovery (modo clássico — Private DNS namespace)
+# ----------------------------------------------------------------------------
+# Cria `aws_service_discovery_service` SÓ se `var.cloud_map_service != null`.
+# O service ECS abaixo passa o ARN desse recurso em `service_registries`, e o
+# ECS Agent registra/desregistra os IPs das tasks como A records (multivalue)
+# na Private Hosted Zone do namespace.
+#
+# routing_policy = MULTIVALUE → Route53 retorna até 8 IPs no response; cliente
+# escolhe um aleatório (DNS round-robin). Cada task viva = 1 A record.
+#
+# health_check_custom_config: ECS marca instância UP/DOWN baseado no task status
+# (RUNNING/STOPPED). Route53 health checks ATIVOS adicionariam custo $0.50/check
+# e exigiriam endpoint público — não usamos.
+# ============================================================================
+
+resource "aws_service_discovery_service" "this" {
+  count = var.cloud_map_service != null ? 1 : 0
+
+  name = var.cloud_map_service.name
+
+  dns_config {
+    namespace_id   = var.cloud_map_namespace_id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      ttl  = try(var.cloud_map_service.ttl, 30)
+      type = "A"
+    }
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = var.tags
+}
+
+# ============================================================================
 # Service
 # ----------------------------------------------------------------------------
 # Usa o módulo upstream `terraform-aws-modules/ecs/aws//modules/service@7.5.0`
@@ -113,6 +151,16 @@ module "service" {
   # Service Connect: passa o map cru pro upstream. {} = SC desligado.
   # Quando ligado, ECS injeta envoy sidecar automático na task.
   service_connect_configuration = var.service_connect_configuration
+
+  # Cloud Map clássico: registra o ECS service no aws_service_discovery_service
+  # criado acima. ECS Agent registra/desregistra A records conforme tasks sobem/morrem.
+  # Upstream tipa service_registries como object({..., registry_arn = string}) com
+  # default = null — passar {} quebra type-check porque registry_arn é obrigatório.
+  service_registries = var.cloud_map_service != null ? {
+    registry_arn   = aws_service_discovery_service.this[0].arn
+    container_name = try(var.cloud_map_service.container_name, var.container_name)
+    container_port = try(var.cloud_map_service.container_port, null)
+  } : null
 
   tags = var.tags
 }

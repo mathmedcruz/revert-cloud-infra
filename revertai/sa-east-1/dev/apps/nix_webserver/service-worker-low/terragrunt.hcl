@@ -85,10 +85,8 @@ inputs = {
     }
   }
 
-  # Service Connect CLIENT-only — resolve evolution-api.rvt-dev.local:8080.
-  service_connect_configuration = {
-    enabled = true
-  }
+  # Sem Service Connect: Celery worker chama evolution-api via Route53 VPC
+  # resolver (Cloud Map Private DNS) ao consumir tarefas que envolvem WhatsApp.
 
   tags = dependency.tags.outputs.tags
 }
