@@ -114,14 +114,50 @@ variable "service_connect_configuration" {
   type        = any
   default     = {}
   description = <<-EOT
-    Config de Service Connect. {} (default) = sem SC. Cluster precisa ter
-    `service_connect_defaults.namespace` setado pra dispensar passar `namespace`
-    aqui. Modos:
+    Config de Service Connect (alternativa ao Cloud Map clássico — usar UM dos dois).
+    {} (default) = sem SC. Cluster precisa ter `service_connect_defaults.namespace`
+    setado pra dispensar passar `namespace` aqui. Modos:
       - Server (publica alias): { enabled = true, service = [{ port_name, client_alias = { ... } }] }
       - Client only (resolve aliases): { enabled = true } (sem `service`)
     O envoy sidecar adiciona ~256 MiB de memory + ~50 mCPU por task — confirmar
     que cpu/memory da task-def comporta antes de habilitar.
   EOT
+}
+
+# ============================================================================
+# Cloud Map clássico (Private DNS namespace + service_registries)
+# ============================================================================
+
+variable "cloud_map_service" {
+  type        = any
+  default     = null
+  description = <<-EOT
+    Config pra registrar o ECS service num Cloud Map service (modo clássico,
+    alternativo ao Service Connect). null (default) = não cria.
+
+    Quando setado, cria um `aws_service_discovery_service` no namespace passado
+    em `cloud_map_namespace_id` e amarra o ECS service nele via `service_registries`.
+    ECS Agent registra/desregistra A records (multivalue) na Private Hosted Zone
+    do namespace conforme tasks sobem/morrem.
+
+    Schema:
+      {
+        name           = string             # nome do service no Cloud Map (vira <name>.<namespace>)
+        ttl            = optional(number)   # TTL do A record. Default 30s.
+        container_name = optional(string)   # default: var.container_name
+        container_port = optional(number)   # default: null (usa porta única do task-def)
+      }
+
+    Sem overhead de envoy. Trade-off: stale endpoint até TTL quando task morre,
+    sem métricas L7. Usar `service_connect_configuration` OU `cloud_map_service`,
+    NÃO os dois ao mesmo tempo.
+  EOT
+}
+
+variable "cloud_map_namespace_id" {
+  type        = string
+  default     = null
+  description = "ID do Private DNS namespace (vindo de cloudmap/ outputs). Obrigatório quando cloud_map_service != null."
 }
 
 # ============================================================================

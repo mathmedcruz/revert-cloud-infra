@@ -60,6 +60,14 @@
             "Resource": "*"
         },
         {
+            "Sid": "ServiceDiscoveryFullForCloudMapAndServiceConnect",
+            "Effect": "Allow",
+            "Action": [
+                "servicediscovery:*"
+            ],
+            "Resource": "*"
+        },
+        {
             "Sid": "ELBv2FullForALBAndTargetGroups",
             "Effect": "Allow",
             "Action": [

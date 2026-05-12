@@ -24,19 +24,6 @@ dependency "tags" {
   }
 }
 
-# Cloud Map namespace usado pelo Service Connect. Setando aqui no cluster
-# vira o default — services não precisam repetir `namespace` no
-# `service_connect_configuration` deles, basta `enabled = true`.
-dependency "cloudmap" {
-  config_path = "../cloudmap"
-
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_with_state           = true
-  mock_outputs = {
-    namespace_arn = "arn:aws:servicediscovery:sa-east-1:000000000000:namespace/ns-mock"
-  }
-}
-
 inputs = {
   name = "${local.app_name}-${local.environment}"
 
@@ -48,12 +35,9 @@ inputs = {
     }
   }
 
-  # Default namespace pra Service Connect. Qualquer service que setar
-  # `service_connect_configuration.enabled = true` herda esse namespace
-  # automaticamente — não precisa repetir o ARN em cada service.
-  service_connect_defaults = {
-    namespace = dependency.cloudmap.outputs.namespace_arn
-  }
+  # Sem `service_connect_defaults` — services usam Cloud Map clássico (Private DNS
+  # namespace via `aws_service_discovery_service` + `service_registries` no service).
+  # Resolução intra-VPC é nativa via Route53; não precisa de envoy sidecar.
 
   tags = dependency.tags.outputs.tags
 }
