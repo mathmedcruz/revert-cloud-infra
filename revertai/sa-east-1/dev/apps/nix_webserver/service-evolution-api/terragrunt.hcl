@@ -115,12 +115,13 @@ inputs = {
   # `evolution-api.rvt-${env}.local` apontando pros IPs das tasks vivas.
   # Web/workers resolvem via Route53 VPC resolver (DNS nativo) — sem envoy.
   #
-  # `container_port = 8080` precisa bater com a porta que a Evolution escuta
-  # em `nix_webserver/task-definitions/evolution-api.json` (containerPort).
+  # Não setamos container_port aqui: para A records com awsvpc, AWS API rejeita
+  # esse campo no bloco service_registries — porta sai do task-def via ENI da task.
+  # A porta 8080 que a Evolution escuta vive em
+  # `nix_webserver/task-definitions/evolution-api.json` (containerPort).
   cloud_map_service = {
-    name           = "evolution-api"
-    ttl            = 30
-    container_port = 8080
+    name = "evolution-api"
+    ttl  = 30
   }
   cloud_map_namespace_id = dependency.cloudmap.outputs.namespace_id
 

@@ -144,11 +144,14 @@ variable "cloud_map_service" {
 
     Schema:
       {
-        name           = string             # nome do service no Cloud Map (vira <name>.<namespace>)
-        ttl            = optional(number)   # TTL do A record. Default 30s.
-        container_name = optional(string)   # default: var.container_name
-        container_port = optional(number)   # default: null (usa porta única do task-def)
+        name = string             # nome do service no Cloud Map (vira <name>.<namespace>)
+        ttl  = optional(number)   # TTL do A record. Default 30s.
       }
+
+    Nota: para A records com awsvpc, AWS API rejeita container_name/container_port/
+    port no bloco service_registries do ECS service. Esses campos só existem pra
+    SRV records, que este módulo não usa (type = "A" hardcoded). O IP da task vai
+    direto via ENI da awsvpc.
 
     Sem overhead de envoy. Trade-off: stale endpoint até TTL quando task morre,
     sem métricas L7. Usar `service_connect_configuration` OU `cloud_map_service`,
