@@ -154,12 +154,14 @@ module "service" {
 
   # Cloud Map clássico: registra o ECS service no aws_service_discovery_service
   # criado acima. ECS Agent registra/desregistra A records conforme tasks sobem/morrem.
+  # SÓ passa registry_arn — para A records com awsvpc, a AWS API rejeita
+  # container_name/container_port/port (esses campos são exclusivos de SRV records).
+  # Erro real visto: "The values specified for serviceRegistries do not require a
+  # value for 'containerPort'. Remove the value and retry."
   # Upstream tipa service_registries como object({..., registry_arn = string}) com
   # default = null — passar {} quebra type-check porque registry_arn é obrigatório.
   service_registries = var.cloud_map_service != null ? {
-    registry_arn   = aws_service_discovery_service.this[0].arn
-    container_name = try(var.cloud_map_service.container_name, var.container_name)
-    container_port = try(var.cloud_map_service.container_port, null)
+    registry_arn = aws_service_discovery_service.this[0].arn
   } : null
 
   tags = var.tags
